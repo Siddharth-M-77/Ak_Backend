@@ -204,8 +204,21 @@ export const userLogin = async (req, res) => {
 };
 export const joinOrUpgradePlan = async (req, res) => {
   try {
-    const { amount } = req.body;
+    const { amount, walletAddress } = req.body;
     const userId = req.user._id;
+    if (!amount || !walletAddress) {
+      return res.status(400).json({
+        message: "Amount and wallet address are required",
+      });
+    }
+    const existingInvestment = await Investment.findOne({ txResponse });
+    if (existingInvestment) {
+      return res.status(409).json({
+        success: false,
+        message: "This transaction has already been processed",
+        investment: existingInvestment,
+      });
+    }
     const validPlans = await Plan.find({}).distinct("amount");
 
     if (!validPlans.includes(amount)) {
@@ -261,6 +274,7 @@ export const joinOrUpgradePlan = async (req, res) => {
         planId: plan._id,
         purchaseDate: Date.now(),
         type: "JOIN",
+        txResponse: txResponse,
       });
 
       // await MatrixModel.create({
@@ -332,6 +346,7 @@ export const getUsersByLevel = async (req, res) => {
     return res.status(500).json({ success: false, message: "Server Error" });
   }
 };
+
 export const createPlan = async (req, res) => {
   try {
     const { amount, name, levels } = req.body;
@@ -385,6 +400,7 @@ export const createPlan = async (req, res) => {
     });
   }
 };
+
 export const getAllPlan = async (_, res) => {
   try {
     const plans = await Plan.find({}).sort({ amount: 1 });
@@ -404,6 +420,7 @@ export const getAllPlan = async (_, res) => {
     return res.status(500).json({ message: "Server Error", error });
   }
 };
+
 export const getProfile = async (req, res) => {
   try {
     const userId = req.user._id || req.admin._id;
@@ -451,6 +468,7 @@ export const getReferalIncomeHistory = async (req, res) => {
     });
   }
 };
+
 export const getLevelIncomeHistory = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -657,6 +675,82 @@ export const autopoolIncomeHistory = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
+    return res.status(500).json({
+      message: error.message || "Server Error",
+      success: false,
+    });
+  }
+};
+
+export const allIncomeDetails = async (req, res) => {
+  try {
+    const userId = req.admin || req.user;
+    if (!userId) {
+      return res.status(401).json({
+        message: "Unauthorized",
+        success: false,
+      });
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Model wise dateField mapping
+    const modelMap = [
+      { model: DirectReferral, name: "referralIncome", dateField: "createdAt" },
+      { model: LevelIncome, name: "levelIncome", dateField: "createdAt" },
+      {
+        model: AutopoolHistory,
+        name: "autopoolIncome",
+        dateField: "creditedOn",
+      },
+      { model: InvestmentModel, name: "investment", dateField: "createdAt" },
+      { model: Withdrawal, name: "withdrawal", dateField: "createdAt" },
+    ];
+
+    const incomeResults = await Promise.all(
+      modelMap.map(async ({ model, dateField }) => {
+        const [total = {}, todayIncome = {}] = await Promise.all([
+          model.aggregate([
+            { $match: { userId } },
+            { $group: { _id: null, total: { $sum: "$amount" } } },
+          ]),
+          model.aggregate([
+            {
+              $match: {
+                userId,
+                [dateField]: { $gte: today },
+              },
+            },
+            { $group: { _id: null, total: { $sum: "$amount" } } },
+          ]),
+        ]);
+
+        return {
+          total: total.total || 0,
+          today: todayIncome.total || 0,
+        };
+      })
+    );
+
+    // Making object from array
+    const responseData = {};
+    modelMap.forEach((entry, index) => {
+      responseData[entry.name] = incomeResults[index];
+    });
+
+    const totalUsers = await UserModel.countDocuments();
+
+    return res.status(200).json({
+      success: true,
+      message: "All Income Details",
+      data: {
+        ...responseData,
+        totalUsers,
+      },
+    });
+  } catch (error) {
+    console.error("Income Fetch Error:", error);
     return res.status(500).json({
       message: error.message || "Server Error",
       success: false,

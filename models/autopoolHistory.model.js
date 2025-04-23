@@ -3,7 +3,8 @@ import mongoose from "mongoose";
 const autopoolHistorySchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
-    refPath: "userRefModel",
+    // refPath: "userRefModel",
+    ref: "UserModel",
     required: true,
   },
   userRefModel: {

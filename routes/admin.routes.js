@@ -19,6 +19,7 @@ import {
   getLevelIncomeHistory,
   getTotalInvestedUsers,
   getAllAutoPoolHistory,
+  allIncomeDetails,
 } from "../controllers/admin.controller.js";
 import { isAdminAuthenticated } from "../middlewares/admin.js";
 import bannerUpload from "../utils/multer.js";
@@ -63,5 +64,6 @@ router
   .route("/support/status/reject/:ticketId")
   .post(isAdminAuthenticated, ticketReject);
 router.route("/support-in-process").get(isAdminAuthenticated, getAllMessage);
+router.route("/getAllIncomes").get(isAdminAuthenticated, allIncomeDetails);
 
 export default router;

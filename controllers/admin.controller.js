@@ -10,6 +10,8 @@ import Banner from "../models/Banner.model.js";
 import path, { dirname } from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import AutopoolHistory from "../models/autopoolHistory.model.js";
+import Withdrawal from "../models/withdrwal.model.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -577,7 +579,7 @@ export const getAllAutoPoolHistory = async (req, res) => {
         message: "Unauthorized",
       });
     }
-    const allAutoPoolHistory = await AutoPool.find({})
+    const allAutoPoolHistory = await AutopoolHistory.find({})
       .populate({
         path: "userId",
         select: "username",
@@ -598,6 +600,112 @@ export const getAllAutoPoolHistory = async (req, res) => {
       data: allAutoPoolHistory,
     });
   } catch (error) {
+    return res.status(500).json({
+      message: error.message || "Server Error",
+      success: false,
+    });
+  }
+};
+
+export const allIncomeDetails = async (req, res) => {
+  try {
+    // Admin check
+    const isAdmin = req.admin;
+    const userId = isAdmin ? null : req.user; // Admin ke liye userId null, user ke liye uska ID
+
+    if (!isAdmin && !userId) {
+      return res.status(401).json({
+        message: "Unauthorized",
+        success: false,
+      });
+    }
+
+    // Aaj ki date ka start time (00:00:00)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Autopool Income
+    const totalAutopool = await AutopoolHistory.aggregate([
+      { $match: userId ? { userId } : {} },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]);
+    const todayAutopool = await AutopoolHistory.aggregate([
+      { $match: { userId, createdAt: { $gte: today } } },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]);
+
+    // Referral Income
+    const totalReferral = await DirectReferral.aggregate([
+      { $match: userId ? { userId } : {} },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]);
+    const todayReferral = await DirectReferral.aggregate([
+      { $match: { userId, createdAt: { $gte: today } } },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]);
+
+    // Level Income
+    const totalLevel = await LevelIncome.aggregate([
+      { $match: userId ? { userId } : {} },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]);
+    const todayLevel = await LevelIncome.aggregate([
+      { $match: { userId, createdAt: { $gte: today } } },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]);
+
+    // Total Users
+    const totalUser = isAdmin ? await UserModel.countDocuments({}) : undefined;
+
+    // Investment
+    const totalInvestment = await InvestmentModel.aggregate([
+      { $match: userId ? { userId } : {} },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]);
+    const todayInvestment = await InvestmentModel.aggregate([
+      { $match: { userId, createdAt: { $gte: today } } },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]);
+
+    // Withdrawals
+    const totalWithdraw = await Withdrawal.aggregate([
+      { $match: userId ? { userId } : {} },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]);
+    const todayWithdraw = await Withdrawal.aggregate([
+      { $match: { userId, createdAt: { $gte: today } } },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      message: "All Income Details",
+      data: {
+        referralIncome: {
+          today: todayReferral[0]?.total || 0,
+          total: totalReferral[0]?.total || 0,
+        },
+        levelIncome: {
+          today: todayLevel[0]?.total || 0,
+          total: totalLevel[0]?.total || 0,
+        },
+        autopoolIncome: {
+          today: todayAutopool[0]?.total || 0,
+          total: totalAutopool[0]?.total || 0,
+        },
+        investment: {
+          today: todayInvestment[0]?.total || 0,
+          total: totalInvestment[0]?.total || 0,
+        },
+        withdrawal: {
+          today: todayWithdraw[0]?.total || 0,
+          total: totalWithdraw[0]?.total || 0,
+        },
+        totalUsers: totalUser || 0,
+      },
+    });
+  } catch (error) {
+    console.error("Income Fetch Error:", error);
     return res.status(500).json({
       message: error.message || "Server Error",
       success: false,
