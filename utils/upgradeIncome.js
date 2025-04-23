@@ -7,6 +7,7 @@ import MatrixModel from "../models/Matrix.model.js";
 import UpgradeTableModel from "../models/upgradeTable.model.js";
 import DirectReferral from "../models/directReferral.model.js";
 import { placeUserInMatrix } from "./placeInMatrix.js";
+import LevelIncome from "../models/levelIncome.model.js";
 
 const LEVEL_INCOME_PERCENT = 30;
 const DIRECT_BONUS_PERCENT = 10;
@@ -74,16 +75,6 @@ export const upgradeIncome = async (userId, amount) => {
       });
     }
 
-    // ✅ Optional: If you need Matrix record creation here
-    // await MatrixModel.create({
-    //   userId: user._id,
-    //   sponsorId: user.sponsorId,
-    //   planId: plan._id,
-    //   planAmount: amount,
-    //   joinedAt: new Date(),
-    //   parentId: user.parentId,
-    // });
-
     await placeUserInMatrix(user, amount, plan._id);
 
     let current = user;
@@ -106,6 +97,14 @@ export const upgradeIncome = async (userId, amount) => {
         },
       });
 
+      await LevelIncome.create({
+        userId: targetUpline._id,
+        fromUserId: userId,
+        amount: levelIncome,
+        planAmount: amount,
+        level,
+        source: "UPGRADE",
+      });
       await handleLevelIncome(userId, amount, "UPGRADE");
 
       await DirectReferral.create({
@@ -114,6 +113,7 @@ export const upgradeIncome = async (userId, amount) => {
         amount: levelIncome,
         investment: amount,
         date: new Date(),
+        type: "UPGRADE",
       });
 
       await Earning.create({

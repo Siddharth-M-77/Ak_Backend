@@ -16,7 +16,7 @@ const matrixSchema = new mongoose.Schema({
   },
   parent: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "UserModel",
+    ref: "MatrixModel",
     default: null,
   },
   children: [

@@ -8,6 +8,8 @@ import MatrixModel from "../models/Matrix.model.js";
 import InvestmentModel from "../models/investment.model.js";
 import DirectReferral from "../models/directReferral.model.js";
 import LevelIncome from "../models/levelIncome.model.js";
+import Withdrawal from "../models/withdrwal.model.js";
+import Support from "../models/support.model.js";
 
 const findAvailableMatrixPosition = async (sponsorId) => {
   const sponsor = await UserModel.findById(sponsorId).lean();
@@ -257,6 +259,7 @@ export const joinOrUpgradePlan = async (req, res) => {
         amount: amount,
         planId: plan._id,
         purchaseDate: Date.now(),
+        type: "JOIN",
       });
 
       // await MatrixModel.create({
@@ -268,7 +271,7 @@ export const joinOrUpgradePlan = async (req, res) => {
       //   parentId: user.parentId,
       // });
 
-      await handleLevelIncome(userId, amount);
+      await handleLevelIncome(userId, amount, "joining");
 
       return res.status(200).json({
         message: "User joined and level income distributed.",
@@ -330,7 +333,7 @@ export const getUsersByLevel = async (req, res) => {
 };
 export const createPlan = async (req, res) => {
   try {
-    const { amount, name, levels } = req.body; // Include levels from request body
+    const { amount, name, levels } = req.body;
 
     if (!amount || !name || !levels) {
       return res.status(400).json({
@@ -492,6 +495,138 @@ export const getDirectUsers = async (req, res) => {
     return res.status(500).json({
       message: error.message || "Server Error",
       success: false,
+    });
+  }
+};
+
+export const withdrawalHistory = async (req, res) => {
+  try {
+    const userId = req.user._id || req.admin._id;
+    console.log(userId);
+    const allWithdrwal = await Withdrawal.find({ userId: userId });
+    if (!allWithdrwal || allWithdrwal.length === 0) {
+      return res.status(200).json({
+        message: "No withdrwal History Found",
+        data: [],
+      });
+    }
+
+    return res.status(200).json({
+      message: "Withdrwal History Fetched",
+      success: false,
+      data: allWithdrwal,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: error.message || "Server Error",
+      success: false,
+      F,
+    });
+  }
+};
+
+export const helpAndSupport = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    console.log(userId);
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    const { message, subject } = req.body;
+    console.log(req.body);
+    if (!message || !subject) {
+      return res
+        .status(400)
+        .json({ success: false, message: "All fields are required" });
+    }
+    const support = await Support.create({
+      userId,
+      message,
+      subject,
+      createdAt: new Date(),
+    });
+    await support.save();
+    res
+      .status(201)
+      .json({ success: true, message: "Support request sent Successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
+
+export const getAllHelpAndSupportHistory = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+    const supportHistory = await Support.find({ userId }).sort({
+      createdAt: -1,
+    });
+    res.json({ success: true, data: supportHistory });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
+
+export const getUsersCountByLevel = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    let levelCounts = [];
+    let currentLevelUsers = [userId];
+    const visited = new Set();
+
+    for (let level = 1; level <= 5; level++) {
+      const users = await UserModel.find(
+        { _id: { $in: currentLevelUsers } },
+        { referedUsers: 1 }
+      );
+
+      let nextLevelUserIds = [];
+
+      users.forEach((user) => {
+        if (user.children && user.children.length > 0) {
+          user.children.forEach((refId) => {
+            const idStr = refId.toString();
+            if (!visited.has(idStr)) {
+              visited.add(idStr);
+              nextLevelUserIds.push(refId);
+            }
+          });
+        }
+      });
+
+      const nextLevelUsers = await UserModel.find(
+        { _id: { $in: nextLevelUserIds } },
+        {
+          username: 1,
+          referralCode: 1,
+          walletAddress: 1,
+          totalInvestment: 1,
+        }
+      );
+
+      levelCounts.push({
+        level,
+        count: nextLevelUsers.length,
+        users: nextLevelUsers,
+      });
+
+      currentLevelUsers = nextLevelUserIds;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: levelCounts,
+    });
+  } catch (error) {
+    console.error("Error in getUsersCountByLevel:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
     });
   }
 };

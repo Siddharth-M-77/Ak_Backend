@@ -1,10 +1,12 @@
 import jwt from "jsonwebtoken";
 import UserModel from "../models/user.model.js";
 import Admin from "../models/admin.model.js";
-
-const IsAuthenticated = async (req, res, next) => {
+export const IsAuthenticated = async (req, res, next) => {
   try {
-    const token = req.headers.authorization.split(" ")[1] || req.cookies.token;
+    const authHeader = req.headers.authorization;
+    const token = (authHeader && authHeader.split(" ")[1]) || req.cookies.token;
+
+    console.log(token, "token");
 
     if (!token) {
       return res.status(401).json({ message: "You are not authenticated." });
@@ -16,20 +18,23 @@ const IsAuthenticated = async (req, res, next) => {
     }
 
     const user =
-      (await UserModel.findById(decode.id)) || Admin.findById(decode._id);
+      (await UserModel.findById(decode.id)) ||
+      (await Admin.findById(decode.id));
+    console.log(user, "user");
+
     if (!user) {
       return res.status(401).json({ message: "User not found." });
     }
+
     req.user = user;
     if (user.role === "admin") {
       const adminFind = await UserModel.findById(user._id);
       req.admin = adminFind;
     }
+
     next();
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
-
-export default IsAuthenticated;
