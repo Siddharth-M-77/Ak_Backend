@@ -3,8 +3,13 @@ import mongoose from "mongoose";
 const autopoolHistorySchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
+    refPath: "userRefModel",
     required: true,
+  },
+  userRefModel: {
+    type: String,
+    required: true,
+    enum: ["UserModel", "MatrixModel"],
   },
   planAmount: {
     type: Number,
@@ -31,7 +36,7 @@ const autopoolHistorySchema = new mongoose.Schema({
     {
       userId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
+        refPath: "contributors.userRefModel",
         required: true,
       },
       amount: {

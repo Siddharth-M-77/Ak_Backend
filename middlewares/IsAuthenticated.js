@@ -6,7 +6,7 @@ export const IsAuthenticated = async (req, res, next) => {
     const authHeader = req.headers.authorization;
     const token = (authHeader && authHeader.split(" ")[1]) || req.cookies.token;
 
-    console.log(token, "token");
+    // console.log(token, "token");
 
     if (!token) {
       return res.status(401).json({ message: "You are not authenticated." });

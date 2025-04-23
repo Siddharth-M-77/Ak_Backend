@@ -10,6 +10,7 @@ import DirectReferral from "../models/directReferral.model.js";
 import LevelIncome from "../models/levelIncome.model.js";
 import Withdrawal from "../models/withdrwal.model.js";
 import Support from "../models/support.model.js";
+import AutopoolHistory from "../models/autopoolHistory.model.js";
 
 const findAvailableMatrixPosition = async (sponsorId) => {
   const sponsor = await UserModel.findById(sponsorId).lean();
@@ -424,7 +425,6 @@ export const getProfile = async (req, res) => {
 export const getReferalIncomeHistory = async (req, res) => {
   try {
     const userId = req.user._id;
-    console.log(userId, "userId");
     const referalIncomeHistory = await DirectReferral.find({
       userId: userId,
     }).populate([
@@ -433,7 +433,9 @@ export const getReferalIncomeHistory = async (req, res) => {
     ]);
 
     if (!referalIncomeHistory || referalIncomeHistory.length === 0) {
-      return res.status(200).json({ message: "User not found", data: [] });
+      return res
+        .status(200)
+        .json({ message: "No referal History found", data: [] });
     }
 
     return res.status(200).json({
@@ -502,7 +504,7 @@ export const getDirectUsers = async (req, res) => {
 export const withdrawalHistory = async (req, res) => {
   try {
     const userId = req.user._id || req.admin._id;
-    console.log(userId);
+    // console.log(userId);
     const allWithdrwal = await Withdrawal.find({ userId: userId });
     if (!allWithdrwal || allWithdrwal.length === 0) {
       return res.status(200).json({
@@ -528,12 +530,12 @@ export const withdrawalHistory = async (req, res) => {
 export const helpAndSupport = async (req, res) => {
   try {
     const userId = req.user._id;
-    console.log(userId);
+    // console.log(userId);
     if (!userId) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
     const { message, subject } = req.body;
-    console.log(req.body);
+    // console.log(req.body);
     if (!message || !subject) {
       return res
         .status(400)
@@ -627,6 +629,37 @@ export const getUsersCountByLevel = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server Error",
+    });
+  }
+};
+
+export const autopoolIncomeHistory = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const autopoolIncomeHistory = await AutopoolHistory.find({ userId: userId })
+      .populate({
+        path: "userId",
+        select: "username",
+      })
+      .populate({
+        path: "contributors.userId",
+        select: "username",
+      });
+
+    if (!autopoolIncomeHistory || autopoolIncomeHistory.length === 0) {
+      return res.status(200).json({ message: "User not found", data: [] });
+    }
+
+    return res.status(200).json({
+      message: "Autopool income history fetched successfully",
+      data: autopoolIncomeHistory,
+      success: true,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      message: error.message || "Server Error",
+      success: false,
     });
   }
 };

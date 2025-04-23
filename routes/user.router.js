@@ -1,6 +1,7 @@
 import express from "express";
 
 import {
+  autopoolIncomeHistory,
   createPlan,
   getAllHelpAndSupportHistory,
   getAllPlan,
@@ -44,5 +45,6 @@ router.route("/get-banners").get(getBanners);
 router.route("/getLevelUsers").get(IsAuthenticated, getUsersCountByLevel);
 router.get("/delete-banner/:id", deleteBanner);
 // router.route("/get-binary").get(IsAuthenticated, getBinaryTree);
+router.route("/autopool-history").get(IsAuthenticated, autopoolIncomeHistory);
 
 export default router;

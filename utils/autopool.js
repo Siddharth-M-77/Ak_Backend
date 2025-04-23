@@ -82,88 +82,60 @@ const getIncomeStructure = (joiningAmount) => {
 };
 
 export const distributeIncome = async () => {
-  console.log("🟡 Starting distributeIncome");
+  // console.log("🟡 Starting distributeIncome");
 
   const userList = await UserModel.find({});
   const matrixList = await MatrixModel.find({});
   const users = [...userList, ...matrixList];
 
-  console.log(`🔍 Total users fetched: ${users.length}`);
+  const processedUserIds = new Set();
 
   for (const user of users) {
-    console.log(
-      `\n👉 Processing user: ${user._id} (${user.username || "no name"})`
-    );
-
-    if (!user.children || user.children.length < 1) {
-      console.log("⛔ Skipping user: no children");
+    if (processedUserIds.has(user._id.toString())) {
+      // console.log(`⏭️ Skipping already processed user: ${user._id}`);
       continue;
     }
+
+    // console.log(
+    //   `\n👉 Processing user: ${user._id} (${user.username || "no name"})`
+    // );
+
+    if (!user.children || user.children.length === 0) continue;
 
     const incomeStructure = getIncomeStructure(user.currentPlanAmount);
-    console.log(
-      `📊 Income Structure for ₹${user.currentPlanAmount}:`,
-      incomeStructure
-    );
+    if (!incomeStructure.length) continue;
 
-    if (!incomeStructure.length) {
-      console.log("⚠️ No income structure found for this plan. Skipping...");
-      continue;
-    }
-
-    let levelsCompleted = 0;
-    let allLevelUsers = [];
     let queue = [...user.children];
+    let level = 0;
+    let stopProcessing = false;
 
-    while (queue.length && levelsCompleted < 6) {
-      const levelUsers = [];
+    while (queue.length && level < incomeStructure.length && !stopProcessing) {
+      const currentLevelUsers = [];
+      const nextQueue = [];
 
       for (const userId of queue) {
         const child = await UserModel.findById(userId);
         if (child) {
-          levelUsers.push(child);
-          if (child.children?.length) {
-            queue.push(...child.children);
-          }
+          currentLevelUsers.push(child);
+          if (child.children?.length) nextQueue.push(...child.children);
         }
       }
 
-      allLevelUsers.push(levelUsers);
-      queue = queue.slice(levelUsers.length);
-      levelsCompleted++;
-
-      console.log(
-        `✅ Level ${levelsCompleted} - users found: ${levelUsers.length}`
-      );
-    }
-
-    for (let i = 0; i < allLevelUsers.length; i++) {
-      const levelInfo = incomeStructure[i];
-      if (!levelInfo) {
-        console.log(`⚠️ No level info for level ${i + 1}`);
-        continue;
-      }
-
-      const usersAtLevel = allLevelUsers[i].filter(
+      const qualifiedUsers = currentLevelUsers.filter(
         (child) =>
           child.currentPlanAmount === user.currentPlanAmount &&
           child.currentPlanAmount > 0
       );
 
-      console.log(
-        `📍 Level ${i + 1} - Qualified users: ${usersAtLevel.length}`
-      );
-
-      if (usersAtLevel.length >= levelInfo.users) {
+      const levelInfo = incomeStructure[level];
+      if (qualifiedUsers.length >= levelInfo.users) {
         const alreadyGot = user.autoPoolIncome?.find(
-          (l) => l.level === i + 1 && l.planAmount === user.currentPlanAmount
+          (l) =>
+            l.level === level + 1 && l.planAmount === user.currentPlanAmount
         );
 
         if (!alreadyGot) {
-          console.log(
-            `💸 Crediting bonus ₹${levelInfo.bonus} for level ${i + 1}`
-          );
-
+          // Crediting bonus
           user.totalAutoPoolIncome =
             (user.totalAutoPoolIncome || 0) + levelInfo.bonus;
           user.totalEarnings = (user.totalEarnings || 0) + levelInfo.bonus;
@@ -172,86 +144,80 @@ export const distributeIncome = async () => {
           user.autoPoolIncome = [
             ...(user.autoPoolIncome || []),
             {
-              level: i + 1,
+              level: level + 1,
               amount: levelInfo.bonus,
               planAmount: user.currentPlanAmount,
               date: new Date(),
             },
           ];
-        } else {
-          console.log(
-            `⏭️ Already got bonus for level ${i + 1}, skipping bonus...`
-          );
-        }
 
-        const sharePerChild = levelInfo.sharing;
-        const contributors = [];
+          // Sharing
+          const sharePerUser = levelInfo.sharing;
+          const contributors = [];
 
-        for (const child of usersAtLevel) {
-          user.totalSharingIncome =
-            (user.totalSharingIncome || 0) + sharePerChild;
-          user.totalEarnings += sharePerChild;
-          user.currentEarnings += sharePerChild;
+          for (const child of qualifiedUsers) {
+            user.totalSharingIncome =
+              (user.totalSharingIncome || 0) + sharePerUser;
+            user.totalEarnings += sharePerUser;
+            user.currentEarnings += sharePerUser;
 
-          user.sharingIncome = [
-            ...(user.sharingIncome || []),
-            {
-              from: child._id,
-              level: i + 1,
-              amount: sharePerChild,
+            user.sharingIncome = [
+              ...(user.sharingIncome || []),
+              {
+                from: child._id,
+                level: level + 1,
+                amount: sharePerUser,
+                planAmount: user.currentPlanAmount,
+                date: new Date(),
+              },
+            ];
+
+            contributors.push({ userId: child._id, amount: sharePerUser });
+          }
+
+          try {
+            await new AutopoolHistory({
+              userId: user._id,
               planAmount: user.currentPlanAmount,
-              date: new Date(),
-            },
-          ];
+              amount: levelInfo.bonus,
+              creditedOn: new Date(),
+              level: level + 1,
+              incomeType: "autopool",
+              contributors,
+            }).save();
 
-          contributors.push({
-            userId: child._id,
-            amount: sharePerChild,
-          });
-        }
-
-        try {
-          const autopoolHistory = new AutopoolHistory({
-            userId: user._id,
-            planAmount: user.currentPlanAmount,
-            amount: levelInfo.bonus,
-            creditedOn: new Date(),
-            level: i + 1,
-            incomeType: "autopool",
-            contributors,
-          });
-          await autopoolHistory.save();
-          console.log(`📝 Saved autopool history for level ${i + 1}`);
-
-          const sharingHistory = new AutopoolHistory({
-            userId: user._id,
-            planAmount: user.currentPlanAmount,
-            amount: sharePerChild * usersAtLevel.length,
-            creditedOn: new Date(),
-            level: i + 1,
-            incomeType: "sharing",
-            contributors,
-          });
-          await sharingHistory.save();
-          console.log(`📝 Saved sharing history for level ${i + 1}`);
-        } catch (err) {
-          console.error(
-            `❌ Error saving history for level ${i + 1}:`,
-            err.message
-          );
+            await new AutopoolHistory({
+              userId: user._id,
+              planAmount: user.currentPlanAmount,
+              amount: sharePerUser * qualifiedUsers.length,
+              creditedOn: new Date(),
+              level: level + 1,
+              incomeType: "sharing",
+              contributors,
+            }).save();
+          } catch (err) {
+            // console.error(`❌ Error saving history:`, err.message);
+          }
+        } else {
+          // console.log(`⏭️ Already got bonus for level ${level + 1}`);
         }
       } else {
-        console.log(
-          `⚠️ Not enough users at level ${i + 1}. Required: ${levelInfo.users}`
-        );
+        // console.log(`⚠️ Not enough users at level ${level + 1}, stopping...`);
+        stopProcessing = true;
       }
+
+      queue = nextQueue;
+      level++;
     }
+
+    // Mark user as processed
+    processedUserIds.add(user._id.toString());
 
     user.markModified("autoPoolIncome");
     user.markModified("sharingIncome");
     await user.save();
-    console.log(`💾 User updated and saved: ${user._id}`);
+    // console.log(`💾 User updated and saved: ${user._id}`);
   }
 
-  console.log("✅ Finished distributeIncome. All histories processed.");
+  // console.log("✅ Finished distributeIncome.");
 };

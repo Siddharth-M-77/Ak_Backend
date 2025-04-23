@@ -205,7 +205,5 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-userSchema.index({ walletAddress: 1 }, { unique: true });
-
 const UserModel = mongoose.model("UserModel", userSchema);
 export default UserModel;

@@ -79,6 +79,6 @@ export const handleLevelIncome = async (joiningUserId, planAmount, source) => {
       currentUser = upline;
     }
   } catch (err) {
-    console.log("Error in handleLevelIncome:", err.message);
+    // console.log("Error in handleLevelIncome:", err.message);
   }
 };

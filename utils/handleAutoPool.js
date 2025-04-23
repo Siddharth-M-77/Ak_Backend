@@ -22,7 +22,7 @@ export const handleAutoPool = async (userId) => {
 
       const levelUsers = allDownlines.filter((dl) => dl.level === level);
 
-      console.log(`Level ${level} - Found ${levelUsers.length} users`);
+      // console.log(`Level ${level} - Found ${levelUsers.length} users`);
 
       if (levelUsers.length >= requiredUsers) {
         const alreadyEarned = await Earning.findOne({
@@ -50,11 +50,11 @@ export const handleAutoPool = async (userId) => {
             level,
           });
 
-          console.log(
-            `AutoPool Income added for User ${userId} at level ${level}`
-          );
+          // console.log(
+          //   `AutoPool Income added for User ${userId} at level ${level}`
+          // );
         } else {
-          console.log(`Already earned AutoPool income at level ${level}`);
+          // console.log(`Already earned AutoPool income at level ${level}`);
         }
       }
     }

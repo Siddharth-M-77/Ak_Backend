@@ -303,7 +303,7 @@ export const uploadBanner = async (req, res) => {
       banner: newBanner,
     });
   } catch (error) {
-    console.log(error);
+    // console.log(error);
     res
       .status(500)
       .json({ message: "Banner upload failed", error: error.message });
@@ -343,7 +343,7 @@ export const deleteBanner = async (req, res) => {
 
     res.json({ message: "Banner deleted successfully" });
   } catch (error) {
-    console.log(error);
+    // console.log(error);
     res
       .status(500)
       .json({ message: "Failed to delete banner", error: error.message });
@@ -567,5 +567,40 @@ export const getBinaryTree = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
+export const getAllAutoPoolHistory = async (req, res) => {
+  try {
+    const userId = req.admin || req.user;
+    if (!userId) {
+      return res.status(404).json({
+        message: "Unauthorized",
+      });
+    }
+    const allAutoPoolHistory = await AutoPool.find({})
+      .populate({
+        path: "userId",
+        select: "username",
+      })
+      .populate({
+        path: "contributors.userId",
+        select: "username",
+      });
+    if (!allAutoPoolHistory) {
+      return res.status(200).json({
+        message: "No Auto Pool History Found",
+        success: false,
+      });
+    }
+    return res.status(200).json({
+      message: "All Auto Pool History",
+      success: true,
+      data: allAutoPoolHistory,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: error.message || "Server Error",
+      success: false,
+    });
   }
 };
